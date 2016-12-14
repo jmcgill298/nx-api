@@ -1,3 +1,4 @@
+import xlsxwriter
 from sys import argv
 from datetime import datetime
 from functions import nx_login
@@ -9,18 +10,18 @@ def main(switch):
     """
     This makes an API call to a switch to collect interface stats, and
     then filters the results to just the relevant information. This data
-    is then saved to a file named "switchname_date_hourminute.csv."
+    is then saved to a file named "switchname_date_hourminute.xlsx."
 
     :param switch: The switch to view interfaces.
 
-    :saves: A CSV with columnt headers and their corresponding values
+    :saves: A xlsx with column headers and their corresponding values
     for each interface on the switch.
 
     :example:
-    (py3) C:\Users>python nxapi_sh_intfcs.py 10.1.1.1
+    (py3) C:\\Users>python nxapi_sh_intfcs.py 10.1.1.1
     What is your username: admin
     What is your password
-    (EXAMPLE is 10.1.1.1_12122016_1618.xlsx)
+    (EXAMPLE is 10.1.1.1_14122016_054.xlsx)
     """
     header = nx_login(switch)
     sw_intfcs = NxIntfc(header, switch)
@@ -31,15 +32,25 @@ def main(switch):
         current.day, current.month, current.year, current.hour, current.minute
     )
 
-    with open('{}_{}.csv'.format(switch, stamp), 'w') as intfcs_csv:
-        for key in sh_sw_intfcs[0]:
-            intfcs_csv.write('{},'.format(key))
-        intfcs_csv.write('\n')
+    workbook = xlsxwriter.Workbook('{}_{}.xlsx'.format(switch, stamp))
+    worksheet = workbook.add_worksheet()
+    format = workbook.add_format({'bold': True})
 
-        for entry in sh_sw_intfcs:
-            for key in entry:
-                intfcs_csv.write('{},'.format(entry[key]))
-            intfcs_csv.write('\n')
+    column = 0
+    row = 0
+    for key in sh_sw_intfcs[0]:
+        worksheet.write_string(column, row, key, format)
+        row += 1
+
+    for entry in sh_sw_intfcs:
+        row = 0
+        column += 1
+        for key in entry:
+            worksheet.write(column, row, entry[key])
+            row += 1
+
+    worksheet.freeze_panes(1, 0)
+    workbook.close()
 
 
 def sh_intfcs_fltr(req):
@@ -49,7 +60,7 @@ def sh_intfcs_fltr(req):
     provides different relevant keys based on they type of interface (mgmt,
     ethernet, svi, port-channel). This function first filters to identify
     the type of interface, and each interface is then filtered into an
-    identical Ordered Dictionay so that all counters are aligned.
+    identical Ordered Dictionary so that all counters are aligned.
 
     :param req: The results of an API request for "show interfaces"
 
@@ -180,11 +191,6 @@ def sh_intfcs_fltr(req):
                 ip = "none"
                 mask = "none"
 
-            members = intfc_dict["eth_members"].split(',')
-            pc_members = ''
-            for member in members:
-                pc_members += member
-
             sh_intfcs_list.append(OrderedDict(
                 [
                     ("INTERFACE", intfc_dict["interface"]),
@@ -212,7 +218,7 @@ def sh_intfcs_fltr(req):
                     ("RX DISCARDS", intfc_dict["eth_indiscard"]),
                     ("TX ERRORS", intfc_dict["eth_outerr"]),
                     ("TX DISCARDS", intfc_dict["eth_outdiscard"]),
-                    ("PC MEMBBERS", pc_members)
+                    ("PC MEMBBERS", intfc_dict["eth_members"])
                 ]
             ))
 
